@@ -1,1 +1,475 @@
+#include <stdio.h>
+#include <vector>
+#include <stdlib.h>
+#include <new>
+#include <math.h>
+#include <ctime>
+#include <deque>
+#include <stack>
+#include <queue>
+#include <limits.h>
+#include <chrono>
+#include <time.h>
 
+
+int moves_r[4] = {-1, 0, 1, 0};
+int moves_c[4] = {0, -1, 0, 1};
+
+
+
+struct Node {
+public:
+    int weight;
+    int total_dist;
+    int dist_from_start;
+    int euclid_dist;
+    int id;
+
+    bool is_wall = false;
+    bool is_start = false;
+    bool is_end = false;
+
+    int row;
+    int col;
+
+    Node(){}
+
+    Node(int xid, int xweight) {
+        weight = xweight;
+        id = xid;
+    }
+
+    Node(int xid, int xweight, int dfs, int td, int ed, int xrow, int xcol) {
+        weight = xweight;
+        id = xid;
+        total_dist = td;
+        dist_from_start = dfs;
+        euclid_dist = ed;
+        row = xrow;
+        col = xcol;
+    }
+};
+
+
+
+void free_matrix(std::vector<std::vector<Node*>> matrix, int rows, int cols) {
+    for(int r = 0; r < rows; r++) {
+        for(int c = 0; c < cols; c++) {
+            delete matrix[r][c];
+        }
+    }
+}
+
+
+
+void reset_matrix(std::vector<std::vector<Node*>> matrix, int R, int C) {
+    for(int r = 0; r < R; r++) {
+        for(int c = 0; c < C; c++) {
+            matrix[r][c]->dist_from_start = INT_MAX;
+            matrix[r][c]->total_dist = INT_MAX;
+        }
+    }
+}
+
+
+
+int get_dist(int s_row, int s_col, int c_row, int c_col) {
+    int row_diff = std::abs(s_row - c_row);
+    int col_diff = std::abs(s_col - c_col);
+
+    double temp = std::pow(double(row_diff), 2.0) + std::pow(double(col_diff), 2.0);
+    int dist = std::sqrt(temp);
+
+    return dist;
+}
+
+
+
+std::vector<std::vector<Node*>> make_matrix(int rows, int cols, int p_walls) {
+
+    std::vector<std::vector<Node*>> matrix(rows + 1, std::vector<Node*>(cols + 1));
+
+    int temp_id = 1;
+    bool start_selected = false;
+    bool end_selected = false;
+
+    int s_row = 0;
+    int s_col = 0;
+    int e_row = rows - 1;
+    int e_col = cols - 1;
+
+    int cap = rows * cols;
+    
+
+
+    // "randomly" select start and end and build in barriers
+    for(int r = 0; r < rows; r++) {
+        for(int c = 0; c < cols; c++) {
+            int select = 1 + std::rand() % cap;
+
+            if(select == 1 && start_selected == false) {
+                s_row = r;
+                s_col = c;
+                start_selected = true;
+            }
+            if(select == cap && end_selected == false) {
+                e_row = r;
+                e_col = c;
+                end_selected = true;
+            }
+            
+        }
+    }
+
+    
+    // init the nodes
+    for(int r = 0; r < rows; r++) {
+        for(int c = 0; c < cols; c++) {
+            int weight = 1 + std::rand() % 15;
+            //int weight = 0;
+            int wall_select = 1 + std::rand() % 100;
+            int dfe = get_dist(e_row, e_col, r, c);
+
+            matrix[r][c] = new Node(temp_id, weight, INT_MAX, INT_MAX, dfe, r, c);
+            temp_id ++;
+
+            if(wall_select <= p_walls) {
+                matrix[r][c]->is_wall = true;
+            }
+        }
+    }
+
+
+    matrix[s_row][s_col]->is_start = true;
+    matrix[e_row][e_col]->is_end = true;
+
+
+    return matrix;
+}
+
+
+void display_matrix(std::vector<std::vector<Node*>> matrix, int rows, int cols) {
+    for(int r = 0; r < rows; r++) {
+        for(int c = 0; c < cols; c++) {
+            if(matrix[r][c]->is_start) {
+                printf("%c ", 'S');
+            }
+            if(matrix[r][c]->is_end) {
+                printf("%c(%d) ", 'E', matrix[r][c]->dist_from_start);
+            }
+            else {
+                //printf("(%d,%d) ", matrix[r][c]->row, matrix[r][c]->col);
+                printf("%d ", matrix[r][c]->weight);
+            }
+        }
+
+        printf("\n");
+    }
+}
+
+
+
+std::vector<int> get_start_cords(std::vector<std::vector<Node*>> matrix, int R, int C) {
+    for(int r = 0; r < R; r++) {
+        for(int c = 0; c < C; c++) {
+            if(matrix[r][c]->is_start) {
+                return {r, c};
+            }
+        }
+    }
+
+
+    return {};
+}
+
+
+
+bool BFS(std::vector<std::vector<Node*>> matrix,int s_row, int s_col, int rows, int cols, std::vector<std::vector<int>> vis) {
+    std::deque<Node*> Q;
+    Q.push_back(matrix[s_row][s_col]);
+
+    vis[s_row][s_col] = 1;
+
+
+    while(!Q.empty()) {
+        Node* c_node = Q.front();
+        Q.pop_front();
+        
+
+        if(c_node->is_end == true) return true;
+            
+
+        for(int i = 0; i < 4; i++) {
+            int n_row = c_node->row + moves_r[i];
+            int n_col = c_node->col + moves_c[i];
+            
+            
+            if(n_row >= 0 && n_row < rows && n_col >= 0 && n_col < cols && vis[n_row][n_col] == 0 && (matrix[n_row][n_col]->is_wall == false)) {
+
+                if(matrix[n_row][n_col]->is_end) return true;
+                    
+                vis[n_row][n_col] = 1;
+                Q.push_back(matrix[n_row][n_col]);
+            }
+        }
+    }
+    return false;
+}
+
+
+
+bool DFS(std::vector<std::vector<Node*>> matrix,int s_row, int s_col, int rows, int cols, std::vector<std::vector<int>> vis) {
+    std::stack<Node*> S;
+    S.push(matrix[s_row][s_col]);
+
+
+    while(!S.empty()) {
+        Node* c_node = S.top();
+        S.pop();
+        
+
+        if(vis[c_node->row][c_node->col] == 1) {
+            continue;
+        }
+        
+
+        vis[c_node->row][c_node->col] = 1;
+        if(c_node->is_end == true) return true;
+            
+
+        for(int i = 0; i < 4; i++) {
+            int n_row = c_node->row + moves_r[i];
+            int n_col = c_node->col + moves_c[i];
+            
+            
+            if(n_row >= 0 && n_row < rows && n_col >= 0 && n_col < cols && vis[n_row][n_col] == 0 && (matrix[n_row][n_col]->is_wall == false)) {
+
+                if(matrix[n_row][n_col]->is_end) return true;
+                S.push(matrix[n_row][n_col]);
+            }
+        }
+    }
+
+    
+    return false;
+}
+
+
+
+
+bool Djikstra(std::vector<std::vector<Node*>> matrix,int s_row, int s_col, int rows, int cols, std::vector<std::vector<int>> vis) {
+    auto cmp = [](Node* a, Node* b) {return a->dist_from_start > b->dist_from_start;};
+    std::priority_queue<Node*, std::vector<Node*>, decltype(cmp)> pq(cmp);
+
+
+    matrix[s_row][s_col]->dist_from_start = 0;
+    pq.push(matrix[s_row][s_col]);
+
+
+    while(!pq.empty()) {
+        Node* c_node = pq.top();
+        pq.pop();
+
+        if(vis[c_node->row][c_node->col] == 1) continue;
+        if(c_node->is_end) return true;
+
+
+        vis[c_node->row][c_node->col] = 1;
+        for(int i = 0; i < 4; i++) {
+            int n_row = c_node->row + moves_r[i];
+            int n_col = c_node->col + moves_c[i];
+            
+            
+            if(n_row >= 0 && n_row < rows && n_col >= 0 && n_col < cols && vis[n_row][n_col] == 0 && (matrix[n_row][n_col]->is_wall == false)) {
+                int n_dfs = c_node->dist_from_start + std::abs(c_node->weight - matrix[n_row][n_col]->weight);
+                
+                if(n_dfs < matrix[n_row][n_col]->dist_from_start) {
+                    matrix[n_row][n_col]->dist_from_start = n_dfs;
+                    pq.push(matrix[n_row][n_col]);
+                }
+                if(matrix[n_row][n_col]->is_end) return true;
+                
+            }
+        }
+    }
+
+    return false;
+}
+
+
+
+
+
+bool A_star(std::vector<std::vector<Node*>> matrix,int s_row, int s_col, int rows, int cols, std::vector<std::vector<int>> vis) {
+    auto cmp = [](Node* a, Node* b) {return a->total_dist + a->euclid_dist > b->total_dist + b->euclid_dist;};
+    std::priority_queue<Node*, std::vector<Node*>, decltype(cmp)> pq(cmp);
+
+
+    matrix[s_row][s_col]->dist_from_start = 0;
+    //matrix[s_row][s_col]->total_dist = matrix[s_row][s_col]->euclid_dist;
+    pq.push(matrix[s_row][s_col]);
+
+
+    while(!pq.empty()) {
+        Node* c_node = pq.top();
+        pq.pop();
+
+
+        if(vis[c_node->row][c_node->col] == 1) continue;
+        if(c_node->is_end) return true;
+
+
+        vis[c_node->row][c_node->col] = 1;
+        for(int i = 0; i < 4; i++) {
+            int n_row = c_node->row + moves_r[i];
+            int n_col = c_node->col + moves_c[i];
+            
+            
+            if(n_row >= 0 && n_row < rows && n_col >= 0 && n_col < cols && vis[n_row][n_col] == 0 && (matrix[n_row][n_col]->is_wall == false)) {
+                int n_dfs = c_node->dist_from_start + std::abs(c_node->weight - matrix[n_row][n_col]->weight);
+                if(n_dfs < matrix[n_row][n_col]->dist_from_start) {
+                    matrix[n_row][n_col]->dist_from_start = n_dfs;
+                    //matrix[n_row][n_col]->total_dist = n_dfs + matrix[n_row][n_col]->euclid_dist;
+                    pq.push(matrix[n_row][n_col]);
+                }
+                if(matrix[n_row][n_col]->is_end) return true;
+                
+            }
+        }
+    }
+
+
+    return false;
+}
+
+
+
+
+
+std::vector<long long> compare(int R, int C, std::vector<std::vector<Node*>> matrix) {
+    std::vector<std::vector<int>> vis_blank(R, std::vector<int>(C));
+    std::vector<std::vector<int>> vis = vis_blank;
+
+
+    std::vector<int> start_cords = get_start_cords(matrix, R, C);
+
+
+    long long BFS_avrage = 0;
+    long long DFS_avrage = 0;
+    long long DJIKSTRA_avrage = 0;
+    long long A_STAR_avarage = 0;
+
+
+    // BFS
+    for(int i = 0; i < 10; i++) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        bool temp = BFS(matrix, start_cords[0], start_cords[1], R, C, vis);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto t_duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+        BFS_avrage += t_duration;
+        vis = vis_blank;
+    }
+    
+
+
+    //DFS
+    for(int i = 0; i < 10; i++) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        bool temp = DFS(matrix, start_cords[0], start_cords[1], R, C, vis);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto t_duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+        DFS_avrage += t_duration;
+        vis = vis_blank;
+    }
+    
+
+    // A*
+    for(int i = 0; i < 10; i++) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        bool temp = A_star(matrix, start_cords[0], start_cords[1], R, C, vis);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto t_duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+        A_STAR_avarage += t_duration;
+        vis = vis_blank;
+        reset_matrix(matrix, R, C);
+    }
+
+
+    //Djikstra
+    for(int i = 0; i < 10; i++) {
+        auto t1 = std::chrono::high_resolution_clock::now();
+        bool temp = Djikstra(matrix, start_cords[0], start_cords[1], R, C, vis);
+        auto t2 = std::chrono::high_resolution_clock::now();
+        auto t_duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
+        DJIKSTRA_avrage += t_duration;
+        vis = vis_blank;
+        reset_matrix(matrix, R, C);
+    }
+
+
+
+    BFS_avrage /= 10;
+    DFS_avrage /= 10;
+    DJIKSTRA_avrage /= 10;
+    A_STAR_avarage /= 10;
+
+
+    return {BFS_avrage, DFS_avrage, DJIKSTRA_avrage, A_STAR_avarage};
+}
+
+
+
+
+int main() {
+    int R = 100;
+    int C = 100;
+    int Reps = 100;
+    int W = 0;
+
+
+    std::srand((unsigned) std::time(0));
+    std::vector<std::vector<Node*>> matrix = make_matrix(R, C, W);
+
+
+    std::vector<std::vector<int>> vis_blank(R, std::vector<int>(C));
+    std::vector<std::vector<int>> vis = vis_blank;
+    
+
+    std::vector<long long> res = {0, 0, 0, 0};
+    int i = 0;
+    while(i < Reps) {
+        std::vector<int> sc = get_start_cords(matrix, R, C);
+        if(DFS(matrix, sc[0], sc[1], R, C, vis) == false) {
+            vis = vis_blank;
+            free_matrix(matrix, R, C);
+            matrix = make_matrix(R, C, W);
+            continue;
+        }
+
+        std::vector<long long> temp = compare(R, C, matrix);
+        res[0] += temp[0];
+        res[1] += temp[1];
+        res[2] += temp[2];
+        res[3] += temp[3];
+        free_matrix(matrix, R, C);
+        matrix = make_matrix(R, C, W);
+
+
+        i++;
+    }
+    res[0] /= Reps;
+    res[1] /= Reps;
+    res[2] /= Reps;
+    res[3] /= Reps;
+
+
+    //std::vector<int> res = compare(R, C, matrix);
+    printf("avrage execution time for : %d rows and %d columns over %d different Graphs with a %d Wall chance \n", R, C, Reps, W);
+    printf("BFS:      %lld \n", res[0]);
+    printf("DFS:      %lld \n", res[1]);   
+    printf("DIJKSTRA: %lld \n", res[2]);   
+    printf("A*:       %lld \n", res[3]);   
+    
+
+    return 0;
+}
